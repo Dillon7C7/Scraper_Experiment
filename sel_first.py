@@ -16,6 +16,7 @@ class NakedNewsScraper(object):
 		self.url = 'https://www.nakednews.com'
 		self.chrome_options = Options()
 		self.chrome_options.add_argument('--start-maximized')
+		self.chrome_options.add_argument('--incognito')
 		self.delay = 10 # seconds
 		self.username = ''
 		self.password = ''
