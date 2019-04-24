@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from cryptography.fernet import Fernet
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -8,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 import selenium.common.exceptions as CE
+from cryptography.fernet import Fernet
 import time
 
 class NakedNewsScraper(object):
@@ -21,6 +21,7 @@ class NakedNewsScraper(object):
 		self.username = ''
 		self.password = ''
 		self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
+		self.segment_types = []
 
 	def get_credentials(self, key_file='.nnkey', usr_file='.nnuser', pw_file='.nnpass'):
 		
@@ -79,9 +80,9 @@ class NakedNewsScraper(object):
 				print(e)
 
 			attempts += 1
-		self.search_by_segment()
+		self.switch_to_search_by_segment()
 	
-	def search_by_segment(self):
+	def switch_to_search_by_segment(self):
 		
 		attempts = 0
 		while (attempts < 8):
@@ -94,21 +95,40 @@ class NakedNewsScraper(object):
 				break
 					
 			except Exception as e:
-				print('second fail')
+				print('Failed to navigate to \'SEARCH BY SEGMENT\'')
 				print(e)
 
 			attempts += 1
 
-		#actions = ActionChains(self.browser)
-		#actions.move_to_element(archive_button)
-		#actions.click(archive_button)
-		#actions.perform()
-			
+		self.get_segment_type()
+
+	def get_segment_type(self):
+
+		attempts = 0
+		while (attempts < 8):
+			try:
+				wait = WebDriverWait(self.browser, self.delay)
+				wait.until(EC.presence_of_element_located((By.ID, 'filter-segments')))
+
+				segment_filter = self.browser.find_element_by_id('filter-segments')
+				segment_type = segment_filter.find_elements_by_tag_name('li')
+
+				break
+
+			except Exception as e:
+				print(e)
+
+			attempts += 1
+
+		for li in segment_type:
+			self.segment_types.append(li.text)
+				
+
 ########################################
 if __name__ == '__main__':
 	scraper = NakedNewsScraper()
 	scraper.load_browser()
 	scraper.login()
 	scraper.switch_to_archives()
-	time.sleep(5)
+	time.sleep(4)
 	scraper.browser.quit()
