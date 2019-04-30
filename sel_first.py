@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 import selenium.common.exceptions as CE
+from selenium.common.exceptions import TimeoutException
 from cryptography.fernet import Fernet
 import time
 
@@ -80,9 +81,8 @@ class NakedNewsScraper(object):
 				print(e)
 
 			attempts += 1
-		self.switch_to_search_by_segment()
 	
-	def switch_to_search_by_segment(self):
+	def switch_to_segment_list(self):
 		
 		attempts = 0
 		while (attempts < 8):
@@ -108,10 +108,12 @@ class NakedNewsScraper(object):
 		while (attempts < 8):
 			try:
 				wait = WebDriverWait(self.browser, self.delay)
+
+				# list of segment types
 				wait.until(EC.presence_of_element_located((By.ID, 'filter-segments')))
 
 				segment_filter = self.browser.find_element_by_id('filter-segments')
-				segment_type = segment_filter.find_elements_by_tag_name('li')
+				#segment_type_li = segment_filter.find_elements_by_tag_name('li')
 
 				break
 
@@ -120,8 +122,76 @@ class NakedNewsScraper(object):
 
 			attempts += 1
 
-		for li in segment_type:
-			self.segment_types.append(li.text)
+
+
+
+
+
+
+
+		#########################TEST STUFF#####################################
+
+		segment_filter.find_element_by_link_text('Travels').click()
+
+		wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
+
+		archive_index_view = self.browser.find_element_by_id('arhive_index_view')
+
+		try:
+			
+			wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
+			segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
+			last_button = segment_page_num_div.find_element_by_partial_link_text('LAST')
+			num_pages = last_button.get_attribute('href')
+			last_page_num = num_pages[-1]
+			video_page_div = archive_index_view.find_element_by_class_name('archives-content')
+			video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div')
+			for vid in video_page_list:
+				print(vid.find_element_by_class_name('caption').text)
+				
+			
+
+		# this segment doesn't have a "last" button to worry about.
+		except TimeoutException:
+			print('PASS THIS SEGMENT. JUST ONE PAGE')		
+			print('JUST DO THE GRABBIN FROM FIRST PAGE!')
+		except Exception as e:
+			print('something else failed')
+			print(e)
+
+
+
+
+
+
+
+
+
+
+		#########################TEST STUFF#####################################
+
+		#try:
+		#	wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
+		#except Exception as e:
+		#	print(e)
+		#	print('xiaogou')
+
+
+		#last_but = self.browser.find_element_by_css_selector('#application > div.content > div.pagnation-controls.text-center > ul > li:nth-child(8) > a')
+
+		#for li in segment_type_li:
+		#	self.segment_types.append(li.text)
+
+	def switch_to_segment(self, segment_id='Travels'):
+		pass
+		
+		#import json
+
+		#with open('segment_types.json', 'r') as seg_types:
+		#	self.segment_types = json.load(seg_types)
+
+		#self.segment_types.find_element_by_link_text('test')
+		
 				
 
 ########################################
@@ -130,5 +200,6 @@ if __name__ == '__main__':
 	scraper.load_browser()
 	scraper.login()
 	scraper.switch_to_archives()
+	scraper.switch_to_segment_list()
 	time.sleep(4)
 	scraper.browser.quit()
