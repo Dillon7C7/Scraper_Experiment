@@ -10,6 +10,8 @@ import selenium.common.exceptions as CE
 from selenium.common.exceptions import TimeoutException
 from cryptography.fernet import Fernet
 import time
+import json
+import re
 
 class NakedNewsScraper(object):
 	def __init__(self):
@@ -132,24 +134,37 @@ class NakedNewsScraper(object):
 		#########################TEST STUFF#####################################
 
 		segment_filter.find_element_by_link_text('Travels').click()
-
-		wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
-
-		archive_index_view = self.browser.find_element_by_id('arhive_index_view')
-
+	
 		try:
 			
+			wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
+			archive_index_view = self.browser.find_element_by_id('arhive_index_view')
 			wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
 			segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
+			next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
 			last_button = segment_page_num_div.find_element_by_partial_link_text('LAST')
 			num_pages = last_button.get_attribute('href')
-			last_page_num = num_pages[-1]
+			last_page_num = int(num_pages[-1])
+				
 			video_page_div = archive_index_view.find_element_by_class_name('archives-content')
 			video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div')
 			for vid in video_page_list:
 				print(vid.find_element_by_class_name('caption').text)
 				
+			# click NEXT for every page
+			next_button.click()
 			
+			for page in range(1, last_page_num - 1):
+				wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
+				archive_index_view = self.browser.find_element_by_id('arhive_index_view')
+				wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
+				segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
+				next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
+				video_page_div = archive_index_view.find_element_by_class_name('archives-content')
+				video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div')
+				for vid in video_page_list:
+					print(vid.find_element_by_class_name('caption').text)
+				next_button.click()
 
 		# this segment doesn't have a "last" button to worry about.
 		except TimeoutException:
@@ -158,7 +173,6 @@ class NakedNewsScraper(object):
 		except Exception as e:
 			print('something else failed')
 			print(e)
-
 
 
 
@@ -185,8 +199,6 @@ class NakedNewsScraper(object):
 	def switch_to_segment(self, segment_id='Travels'):
 		pass
 		
-		#import json
-
 		#with open('segment_types.json', 'r') as seg_types:
 		#	self.segment_types = json.load(seg_types)
 
