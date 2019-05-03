@@ -26,6 +26,7 @@ class NakedNewsScraper(object):
 		self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
 		self.segment_types = []
 
+
 	def get_credentials(self, key_file='.nnkey', usr_file='.nnuser', pw_file='.nnpass'):
 		
 		with open(key_file, 'rb') as kf:
@@ -102,9 +103,9 @@ class NakedNewsScraper(object):
 
 			attempts += 1
 
-		self.get_segment_type()
+		#self.get_segment_type()
 
-	def get_segment_type(self):
+	def get_segment_type(self, segment_ID):
 
 		attempts = 0
 		while (attempts < 8):
@@ -133,38 +134,54 @@ class NakedNewsScraper(object):
 
 		#########################TEST STUFF#####################################
 
-		segment_filter.find_element_by_link_text('Travels').click()
+		data = []
+		segment_filter.find_element_by_link_text(segment_ID).click()
 	
 		try:
 			
 			wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
 			archive_index_view = self.browser.find_element_by_id('arhive_index_view')
-			wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
-			segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
-			next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
-			last_button = segment_page_num_div.find_element_by_partial_link_text('LAST')
-			num_pages = last_button.get_attribute('href')
-			last_page_num = int(num_pages[-1])
+			#wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
+
+			# used for conditional
+			segment_page_num_divs = self.browser.find_elements_by_class_name('pagnation-controls')
+
+			if segment_page_num_divs:
+				
+				segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
+				next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
+
+				last_button = segment_page_num_div.find_element_by_partial_link_text('LAST')
+				num_pages = last_button.get_attribute('href')
+				last_page_num = int(num_pages[-1])
+			else:
+				last_page_num = 1
 				
 			video_page_div = archive_index_view.find_element_by_class_name('archives-content')
-			video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div')
+			video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div > div > div')
+			#video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div > div > div > a')
+
 			for vid in video_page_list:
-				print(vid.find_element_by_class_name('caption').text)
-				
-			# click NEXT for every page
-			next_button.click()
-			
-			for page in range(1, last_page_num - 1):
+				data.append(vid.text)
+
+			for page in range(1, last_page_num):
+
+				# click NEXT for every page
+				next_button.click()
 				wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
 				archive_index_view = self.browser.find_element_by_id('arhive_index_view')
 				wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'pagnation-controls')))
 				segment_page_num_div = self.browser.find_element_by_class_name('pagnation-controls')
-				next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
+				# if we are on the last page, do not look for the 'NEXT' button
+				if (page != last_page_num - 1):
+					next_button = segment_page_num_div.find_element_by_partial_link_text('NEXT')
 				video_page_div = archive_index_view.find_element_by_class_name('archives-content')
-				video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div')
+				video_page_list = video_page_div.find_elements_by_css_selector('.archives-content > div > div > div')
+
 				for vid in video_page_list:
-					print(vid.find_element_by_class_name('caption').text)
-				next_button.click()
+					data.append(vid.text)
+					#print(vid.text)
+				
 
 		# this segment doesn't have a "last" button to worry about.
 		except TimeoutException:
@@ -174,11 +191,10 @@ class NakedNewsScraper(object):
 			print('something else failed')
 			print(e)
 
+		filename = segment_ID + '_data.json'
 
-
-
-
-
+	#	with open(filename, 'w') as travel_file:
+	#		json.dump(data, travel_file)
 
 
 
@@ -196,13 +212,18 @@ class NakedNewsScraper(object):
 		#for li in segment_type_li:
 		#	self.segment_types.append(li.text)
 
-	def switch_to_segment(self, segment_id='Travels'):
-		pass
-		
-		#with open('segment_types.json', 'r') as seg_types:
-		#	self.segment_types = json.load(seg_types)
+	def scrape_all(self):
 
-		#self.segment_types.find_element_by_link_text('test')
+		with open('segment_types.json', 'r') as seg_types:
+			self.segment_types = json.load(seg_types)
+
+		for seggy in self.segment_types:
+			if (seggy != 'Travels'):
+				self.switch_to_archives()
+				self.switch_to_segment_list()
+				self.get_segment_type(seggy)
+			
+		
 		
 				
 
@@ -211,7 +232,11 @@ if __name__ == '__main__':
 	scraper = NakedNewsScraper()
 	scraper.load_browser()
 	scraper.login()
-	scraper.switch_to_archives()
-	scraper.switch_to_segment_list()
+	scraper.scrape_all()
+#	scraper.switch_to_archives()
+#	scraper.switch_to_segment_list()
+#	scraper.get_segment_type()
+#	scraper.switch_to_archives()
+#	scraper.switch_to_segment_list()
 	time.sleep(4)
 	scraper.browser.quit()
