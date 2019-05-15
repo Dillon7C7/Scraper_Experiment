@@ -15,16 +15,10 @@ import sys
 import json
 import re
 import logging
-import sqlite3
-import re
+from datetime import datetime
 
-#class Database(object):
-#
-#	def __init__(self, database_name):
-#		self.database_name = database_name
-#		self.db = None
-#		self.cursor = None
-#		self.connect
+# custom module
+import local_db
 
 class NakedNewsScraper(object):
 
@@ -42,8 +36,18 @@ class NakedNewsScraper(object):
 		self.segment_types = []
 
 		log_fmt = '%(filename)s - %(lineno)d - %(funcName)s - %(levelname)s - %(message)s'
-		self.logger = logging.basicConfig(filename='SCRAPE_LOG.log', filemode='w', format=log_fmt, level=logging.ERROR)
+		self.logger = logging.basicConfig(filename='LOGGING/SCRAPE_LOG.log', filemode='w', format=log_fmt, level=logging.ERROR)
 
+		self.db = local_db.Local_Database()
+		self.db.connect_to_database()
+		self.db.create_table()
+	
+	def parse_data(self):
+		pass
+
+	def db_wrapper(self):
+		pass
+		
 	def get_credentials(self, key_file='.nnkey', usr_file='.nnuser', pw_file='.nnpass'):
 		'''Method used to store symmetrically encrypted credentials on disk.
 		
@@ -110,11 +114,8 @@ class NakedNewsScraper(object):
 		''' Switch to archives. '''
 
 		try:
-
 			# this element receives the click before the 'ARCHIVES' link, so we wait until it is not visible.
 			self.wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, '#login_prompt > div.modal-backdrop.in')))
-
-			#invis_element = self.browser.find_element_by_css_selector('#login_prompt > div.modal-backdrop.in')
 
 			# a child div seems to contain the links we need, but doesn't seem to work when clicking
 			self.wait.until(EC.presence_of_element_located((By.ID, 'header-nav')))
@@ -141,9 +142,17 @@ class NakedNewsScraper(object):
 			self.wait.until(EC.presence_of_element_located((By.ID, 'subnav')))
 
 			self.subnav = self.browser.find_element_by_id('subnav')
-			self.search_by_segment_btn = self.subnav.find_element_by_css_selector('#subnav > div.container > ul > li:nth-child(2) > button')
 
+			# 'SEARCH BY SEGMENT' button
+			self.search_by_segment_btn = self.subnav.find_element_by_css_selector('#subnav > div.container > ul > li:nth-child(2) > button')
 			self.search_by_segment_btn.click()
+
+			# web element containing list of segment types
+			self.wait.until(EC.presence_of_element_located((By.ID, 'filter-segments')))
+			self.segment_filter = self.browser.find_element_by_id('filter-segments')
+			
+			# child div of child div containing list of segment types
+			self.segment_filter_div = self.segment_filter.find_element_by_css_selector('#filter-segments > div > div')
 				
 		except Exception as e:
 			logging.error(e, exc_info=True)
@@ -152,14 +161,6 @@ class NakedNewsScraper(object):
 		''' Get the segment types and store result in list self.segment_types and json. '''
 
 		try:
-			self.wait.until(EC.presence_of_element_located((By.ID, 'filter-segments')))
-
-			# web element containing list of segment types
-			self.segment_filter = self.browser.find_element_by_id('filter-segments')
-			
-			# child div of child div containing list of segment types
-			self.segment_filter_div = self.segment_filter.find_element_by_css_selector('#filter-segments > div > div')
-
 			# list of selenium web objects containing segment type text
 			self.segment_type_li = self.segment_filter_div.find_elements_by_tag_name('li')
 
@@ -170,24 +171,18 @@ class NakedNewsScraper(object):
 			with open('segment_types.json', 'w') as segment_json:
 				json.dump(self.segment_types, segment_json)
 
-			#db = sqlite3.connect('MAY14.db')
-			#cursor = db.cursor()
-			#cursor.execute('''CREATE TABLE IF NOT EXISTS segment_types(type_id INTEGER PRIMARY KEY, segment_type TEXT NOT NULL UNIQUE''')
-			#db.commit()
-
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
 	def get_segment_info(self, segment_ID):
-		''' Scrape segment info '''
+		''' Scrape segment information '''
 
-		page_data = []
+		self.page_data = []
+		page_db_data = []
 
 		# link to a certain segment's archives page
 		self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, segment_ID)))
 		self.segment_filter_div.find_element_by_link_text(segment_ID).click()
-
-		#sdlfjasdklfsdfsdf# while the div containing the 'LAST' button exists, click
 
 		while True:
 
@@ -211,58 +206,73 @@ class NakedNewsScraper(object):
 					# Anchors + Segment Type
 					self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#arhive_index_view > div > div > div > div > div > a')))
 					anchor_and_segment = segment.find_element_by_css_selector('#arhive_index_view > div > div > div > div > div > a')
+
+					# text to be parsed (1 of 2)
+					as_text = anchor_and_segment.text
+
+					# Segment type parsed for database (db data: 1 of 3)
+					db_segment = as_text[as_text.index('In ')+3:]
+
+					# Anchors parsed for database (db data: 2 of 3)
+					db_anchors = as_text[:as_text.index('In ')]
 		
 					# Date
 					self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#arhive_index_view > div > div > div > div > div > small')))
 					air_date = segment.find_element_by_css_selector('#arhive_index_view > div > div > div > div > div > small')
+
+					# text to be parsed (2 of 2)
+					ad_text = air_date.text
+
+					date_obj = datetime.strptime(ad_text, '%A %B %d, %Y')
+
+					# Date parsed for database (db data: 3 of 3)
+					db_date = str(date_obj).split(' ')[0]
 		
-					# append anchors, segment type, and date to our list
-					page_data.append((air_date.text, anchor_and_segment.text))
+					db_tuple = (db_segment, db_date, db_anchors)
+					page_db_data.append(db_tuple)
 
-				# list containing web elements with the link text 'LAST »'
+				# list containing web elements with the link text 'LAST »'. len is 0 or 1
 				# **will break the program if it appears elsewhere on the page!
-				self.last_button_list = self.browser.find_elements_by_link_text('LAST »')
+				self.last_button_list = self.browser.find_elements_by_link_text('LAST »') # UTF-8 encoding
 
-				# if the last_button_list is empty, then there is no "LAST" button on the page, and we can break
+				# if the last_button_list is empty, then there is no "LAST" button on the page, and we can exit the loop
 				if not self.last_button_list:
 					break
 				
 				# else:
 				# loop through pages until no "LAST" link is found
-				self.page_list = self.browser.find_element_by_class_name('pagnation-controls')
-				self.next_button = self.page_list.find_element_by_link_text('NEXT ›')
+				self.page_numbers = self.browser.find_element_by_class_name('pagnation-controls')
+				self.next_button = self.page_numbers.find_element_by_link_text('NEXT ›')
+				self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, 'NEXT ›')))
 				self.next_button.click()
 		
 			# most important error check.
 			except Exception as e:
 				logging.error(e, exc_info=True)
 
-		#print(page_data)
+		# insert segment data for segment type into database
+		try:
+			self.db.insert_many(page_db_data)
+		except Exception as e:
+			logging.error(e, exc_info=True)
 
 	def scrape_all(self):
 
-		with open('segment_types.json', 'r') as seg_types:
-			self.segment_types = json.load(seg_types)
+	#	with open('segment_types.json', 'r') as seg_types:
+	#		self.segment_types = json.load(seg_types)
 
-		for seggy in self.segment_types:
-			self.switch_to_archives()
-			self.switch_to_segment_list()
-			self.get_segment_type(seggy)
-			
-		
-				
+		try:
+			for segg in self.segment_types:
+				self.switch_to_archives()
+				self.switch_to_segment_list()
+				self.get_segment_info(segg)
 
-########################################
-if __name__ == '__main__':
-	scraper = NakedNewsScraper()
-	scraper.get_credentials()
-	scraper.load_browser()
-	scraper.login()
-	scraper.switch_to_archives()
-	scraper.switch_to_segment_list()
-	scraper.get_segment_types()
-	scraper.get_segment_info('Travels')
-	#scraper.scrape_all()
-#	scraper.switch_to_archives()
-	time.sleep(4)
-	scraper.browser.quit()
+		except Exception as e:
+			logging.error(e, exc_info=True)
+
+	def finish_up(self):
+		try:
+			self.browser.quit()
+			self.db.close_db()
+		except Exception as e:
+			logging.error(e, exc_info=True)
