@@ -187,7 +187,7 @@ class NakedNewsScraper(object):
 		while True:
 
 			try:
-				# parent div containing nested divs which desired text
+				# parent div containing nested divs which contain desired text
 				self.wait.until(EC.presence_of_element_located((By.ID, 'arhive_index_view')))
 				
 				# wait for first child div of arhive_index_view (container)
@@ -230,6 +230,8 @@ class NakedNewsScraper(object):
 		
 					db_tuple = (db_segment, db_date, db_anchors)
 					page_db_data.append(db_tuple)
+
+				self.browser.implicitly_wait(10)
 
 				# list containing web elements with the link text 'LAST »'. len is 0 or 1
 				# **will break the program if it appears elsewhere on the page!
