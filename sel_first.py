@@ -23,24 +23,46 @@ import local_db
 class NakedNewsScraper(object):
 
 	def __init__(self):
+
 		self.chromedriver_path = '/mnt/c/Users/dillon/AppData/Local/Programs/Python/Python36-32/chromedriver.exe' 
 		self.url = 'https://www.nakednews.com'
+
 		self.chrome_options = Options()
 		self.chrome_options.add_argument('--start-maximized')
 		self.chrome_options.add_argument('--incognito')
-		self.delay = 10 # seconds
-		self.wait = '' # WebDriverWait object
-		self.username = ''
-		self.password = ''
+
+		# tuple of segments to grab data for
+		self.approved_segments = ('Auditions', 'Behind The Lens', 'Behind the Scenes', 'Boob of the Week',
+				'Closing Remarks', 'Cooking in the Raw', 'Dating Uncovered',
+				'Entertainment', 'Flex Appeal', 'Game Spot', 'HollywoodXposed',
+				'Inside The Box', 'Naked At The Movies', 'Naked Foodie', 'Naked Goes Pop',
+				'Naked Goes Pot', 'Naked In The Streets', 'Naked News Moves', 'Naked Yogi',
+				'News off the Top', 'News off the Top Part 2', 'Nude and Improved', 'Odds N Ends',
+				'Odds N Ends Part 2', 'One on One', 'Pillow Talk', 'Point Of View', 'Pop My Cherry',
+				'Riding In A Car Naked', 'Sports', 'Talk is Cheap', 'The Schmooze', 'Travels',
+				'Trending Now', 'Turn it Up', 'Versus', 'Video Blog', "Viewer's Mail", 'Weather', 'Wheels')
+
+		self.log_fmt = '%(filename)s - %(lineno)d - %(funcName)s - %(levelname)s - %(message)s'
+		self.logger = logging.basicConfig(filename='LOGGING/SCRAPE_LOG.log', filemode='w', format=self.log_fmt, level=logging.ERROR)
+
+		# call method to get credentials
+		self.__username, self.__password = self.__get_credentials()
+
+		# initialize browser
 		self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
+
+		self.delay = 10 # seconds
+		self.wait = WebDriverWait(self.browser, self.delay) # WebDriverWait object
+
 		self.segment_types = []
 
-		log_fmt = '%(filename)s - %(lineno)d - %(funcName)s - %(levelname)s - %(message)s'
-		self.logger = logging.basicConfig(filename='LOGGING/SCRAPE_LOG.log', filemode='w', format=log_fmt, level=logging.ERROR)
+		# methods that we always want to run
+		self.__load_browser()
+		self.__login()
 
-		self.db = local_db.Local_Database()
-		self.db.connect_to_database()
-		self.db.create_table()
+		# initialize local sqlite3 database
+		self.db = local_db.Local_Database('local_db.back')
+		self.latest_db_date = self.db.get_latest_date()
 	
 	def parse_data(self):
 		pass
@@ -48,8 +70,8 @@ class NakedNewsScraper(object):
 	def db_wrapper(self):
 		pass
 		
-	def get_credentials(self, key_file='.nnkey', usr_file='.nnuser', pw_file='.nnpass'):
-		'''Method used to store symmetrically encrypted credentials on disk.
+	def __get_credentials(self, key_file='.nnkey', usr_file='.nnuser', pw_file='.nnpass'):
+		'''Method used to get symmetrically encrypted credentials on disk.
 		
 			Attributes:
 				key_file: text file storing the Fernet key.
@@ -72,14 +94,16 @@ class NakedNewsScraper(object):
 		with open(pw_file, 'rb') as pf:
 			password = pf.read()
 		
-		self.username = f.decrypt(username).decode()
-		self.password = f.decrypt(password).decode()
+		username = f.decrypt(username).decode()
+		password = f.decrypt(password).decode()
+
+		return username, password
 		
-	def load_browser(self):
+	def __load_browser(self):
 		''' Load the web browser. '''
 
+		# open browser
 		self.browser.get(self.url)
-		self.wait = WebDriverWait(self.browser, self.delay)
 
 		try:
 			self.wait.until(EC.presence_of_element_located((By.ID, 'mobile-header-nav')))
@@ -88,7 +112,7 @@ class NakedNewsScraper(object):
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def login(self):
+	def __login(self):
 		''' Login to the web browser. '''
 
 		try:
@@ -102,15 +126,15 @@ class NakedNewsScraper(object):
 		try:
 			self.wait.until(EC.presence_of_element_located((By.ID, 'login_prompt')))
 			self.login_prompt = self.browser.find_element_by_id('login_prompt')
-			self.login_prompt.find_element_by_id('modal_customer_username').send_keys(self.username)
-			self.login_prompt.find_element_by_id('modal_customer_password').send_keys(self.password)
+			self.login_prompt.find_element_by_id('modal_customer_username').send_keys(self.__username)
+			self.login_prompt.find_element_by_id('modal_customer_password').send_keys(self.__password)
 			self.login_button2 = self.login_prompt.find_element_by_id('modal_customer_submit_button')
 			self.login_button2.click()
 
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def switch_to_archives(self):
+	def __switch_to_archives(self):
 		''' Switch to archives. '''
 
 		try:
@@ -135,7 +159,7 @@ class NakedNewsScraper(object):
 		except Element as e:
 			logging.error(e, exc_info=True)
 	
-	def switch_to_segment_list(self):
+	def __switch_to_segment_list(self):
 		''' Switch to segment list. '''	
 
 		try:
@@ -157,7 +181,8 @@ class NakedNewsScraper(object):
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def get_segment_types(self):
+	# don't need to call this more than once...ever
+	def __get_segment_types(self):
 		''' Get the segment types and store result in list self.segment_types and json. '''
 
 		try:
@@ -167,18 +192,27 @@ class NakedNewsScraper(object):
 			# list of segment type text
 			self.segment_types = [li.text for li in self.segment_type_li]
 
-			# create seperate class to make a database
+			# dump segment list into a json file
 			with open('segment_types.json', 'w') as segment_json:
 				json.dump(self.segment_types, segment_json)
 
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def get_segment_info(self, segment_ID):
+	def get_segment_info(self, segment_ID, latest_db_date=None):
 		''' Scrape segment information '''
 
-		self.page_data = []
+		is_up_to_date = False
+
+		# parsed data ready to be inserted into db
 		page_db_data = []
+
+		# latest date in database
+		latest_db_date = self.latest_db_date
+
+		# switch to the appropriate page
+		self.__switch_to_archives()
+		self.__switch_to_segment_list()
 
 		# link to a certain segment's archives page
 		self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, segment_ID)))
@@ -214,7 +248,7 @@ class NakedNewsScraper(object):
 					db_segment = as_text[as_text.index('In ')+3:]
 
 					# Anchors parsed for database (db data: 2 of 3)
-					db_anchors = as_text[:as_text.index('In ')]
+					db_anchors = as_text[:as_text.index('In ')].strip()
 		
 					# Date
 					self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#arhive_index_view > div > div > div > div > div > small')))
@@ -227,14 +261,26 @@ class NakedNewsScraper(object):
 
 					# Date parsed for database (db data: 3 of 3)
 					db_date = str(date_obj).split(' ')[0]
+
+					# if latest_db_date is given, and it is >= date of segment,
+					# e.g. if latest_db_date = '2019-03-20' >= db_date = '2019-03-19' then break
+					if latest_db_date and latest_db_date >= db_date:
+						is_up_to_date = True
+						break
 		
+					# else...continue to scrape
+
 					db_tuple = (db_segment, db_date, db_anchors)
 					page_db_data.append(db_tuple)
+
+				# we are up to date with the DB
+				if is_up_to_date:
+					break
 
 				self.browser.implicitly_wait(10)
 
 				# list containing web elements with the link text 'LAST »'. len is 0 or 1
-				# **will break the program if it appears elsewhere on the page!
+				# **will break the program if this string appears elsewhere on the page!
 				self.last_button_list = self.browser.find_elements_by_link_text('LAST »') # UTF-8 encoding
 
 				# if the last_button_list is empty, then there is no "LAST" button on the page, and we can exit the loop
@@ -255,19 +301,18 @@ class NakedNewsScraper(object):
 		# insert segment data for segment type into database
 		try:
 			self.db.insert_many(page_db_data)
+
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def scrape_all(self):
+	def scrape_all(self, latest_db_date=None):
 
-	#	with open('segment_types.json', 'r') as seg_types:
-	#		self.segment_types = json.load(seg_types)
+		# latest date in database
+		latest_db_date = self.latest_db_date
 
 		try:
-			for segg in self.segment_types:
-				self.switch_to_archives()
-				self.switch_to_segment_list()
-				self.get_segment_info(segg)
+			for segg in self.approved_segments:
+				self.get_segment_info(segg, latest_db_date)
 
 		except Exception as e:
 			logging.error(e, exc_info=True)
@@ -275,6 +320,6 @@ class NakedNewsScraper(object):
 	def finish_up(self):
 		try:
 			self.browser.quit()
-			self.db.close_db()
+			#self.db.close_db()
 		except Exception as e:
 			logging.error(e, exc_info=True)
