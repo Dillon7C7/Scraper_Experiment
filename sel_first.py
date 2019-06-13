@@ -28,8 +28,17 @@ class NakedNewsScraper(object):
 		self.url = 'https://www.nakednews.com'
 
 		self.chrome_options = Options()
-		self.chrome_options.add_argument('--start-maximized')
 		self.chrome_options.add_argument('--incognito')
+		self.chrome_options.add_argument('--disable-gpu')
+		self.chrome_options.add_argument('--disable-infobars')
+		self.chrome_options.add_argument('--disable-extensions')
+		self.chrome_options.add_argument('--no-sandbox')
+		self.chrome_options.add_argument('--disable-web-security')
+
+		self.chrome_options.add_argument('--start-maximized')
+
+		#self.chrome_options.add_argument('--headless')
+		#self.chrome_options.add_argument('--window-size=1920,1080') # --start-maximized doesn't work in headless mode
 
 		# tuple of segments to grab data for
 		self.approved_segments = ('Auditions', 'Behind The Lens', 'Behind the Scenes', 'Boob of the Week',
@@ -43,26 +52,31 @@ class NakedNewsScraper(object):
 				'Trending Now', 'Turn it Up', 'Versus', 'Video Blog', "Viewer's Mail", 'Weather', 'Wheels')
 
 		self.log_fmt = '%(filename)s - %(lineno)d - %(funcName)s - %(levelname)s - %(message)s'
-		self.logger = logging.basicConfig(filename='LOGGING/SCRAPE_LOG.log', filemode='w', format=self.log_fmt, level=logging.ERROR)
+		self.logger = logging.basicConfig(filename='LOGGING/SCRAPER.log', filemode='w', format=self.log_fmt, level=logging.ERROR)
 
-		# call method to get credentials
-		self.__username, self.__password = self.__get_credentials()
+		try:
 
-		# initialize browser
-		self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
+			# call method to get credentials
+			self.__username, self.__password = self.__get_credentials()
 
-		self.delay = 10 # seconds
-		self.wait = WebDriverWait(self.browser, self.delay) # WebDriverWait object
+			# initialize browser
+			self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
 
-		self.segment_types = []
+			self.delay = 10 # seconds
+			self.wait = WebDriverWait(self.browser, self.delay) # WebDriverWait object
 
-		# methods that we always want to run
-		self.__load_browser()
-		self.__login()
+			self.segment_types = []
 
-		# initialize local sqlite3 database
-		self.db = local_db.Local_Database('local_db.back')
-		self.latest_db_date = self.db.get_latest_date()
+			# methods that we always want to run
+			self.__load_browser()
+			self.__login()
+
+			# initialize local sqlite3 database
+			self.db = local_db.Local_Database('local_db.back')
+			self.latest_db_date = self.db.get_latest_date()
+
+		except Exception as e:
+			logging.error(e, exc_info=True)
 	
 	def parse_data(self):
 		pass
@@ -79,25 +93,30 @@ class NakedNewsScraper(object):
 				pw_file:  text file storing an encrypted password.
 		'''
 		
-		# key for Fernet object
-		with open(key_file, 'rb') as kf:
-			key = kf.read()
-		
-		# create Fernet object with key from key_file
-		f = Fernet(key)
+		try:
 
-		# get encrypted user name
-		with open(usr_file, 'rb') as uf:
-			username = uf.read()
-		
-		# get encrypted password
-		with open(pw_file, 'rb') as pf:
-			password = pf.read()
-		
-		username = f.decrypt(username).decode()
-		password = f.decrypt(password).decode()
+			# key for Fernet object
+			with open(key_file, 'rb') as kf:
+				key = kf.read()
+			
+			# create Fernet object with key from key_file
+			f = Fernet(key)
 
-		return username, password
+			# get encrypted user name
+			with open(usr_file, 'rb') as uf:
+				username = uf.read()
+			
+			# get encrypted password
+			with open(pw_file, 'rb') as pf:
+				password = pf.read()
+			
+			username = f.decrypt(username).decode()
+			password = f.decrypt(password).decode()
+
+			return username, password
+
+		except Exception as e:
+			logging.error(e, exc_info=True)
 		
 	def __load_browser(self):
 		''' Load the web browser. '''
@@ -156,7 +175,7 @@ class NakedNewsScraper(object):
 		except StaleElementReferenceException as se:
 			logging.error(se, exc_info=True)
 
-		except Element as e:
+		except Exception as e:
 			logging.error(e, exc_info=True)
 	
 	def __switch_to_segment_list(self):
@@ -207,8 +226,9 @@ class NakedNewsScraper(object):
 		# parsed data ready to be inserted into db
 		page_db_data = []
 
-		# latest date in database
-		latest_db_date = self.latest_db_date
+		if latest_db_date:
+			# latest date in database
+			latest_db_date = self.latest_db_date
 
 		# switch to the appropriate page
 		self.__switch_to_archives()
@@ -260,7 +280,7 @@ class NakedNewsScraper(object):
 					date_obj = datetime.strptime(ad_text, '%A %B %d, %Y')
 
 					# Date parsed for database (db data: 3 of 3)
-					db_date = str(date_obj).split(' ')[0]
+					db_date = date_obj.strftime('%Y-%m-%d')
 
 					# if latest_db_date is given, and it is >= date of segment,
 					# e.g. if latest_db_date = '2019-03-20' >= db_date = '2019-03-19' then break
@@ -268,7 +288,7 @@ class NakedNewsScraper(object):
 						is_up_to_date = True
 						break
 		
-					# else...continue to scrape
+					# else, add to database
 
 					db_tuple = (db_segment, db_date, db_anchors)
 					page_db_data.append(db_tuple)
@@ -277,7 +297,7 @@ class NakedNewsScraper(object):
 				if is_up_to_date:
 					break
 
-				self.browser.implicitly_wait(10)
+				self.browser.implicitly_wait(self.delay)
 
 				# list containing web elements with the link text 'LAST »'. len is 0 or 1
 				# **will break the program if this string appears elsewhere on the page!
@@ -305,10 +325,13 @@ class NakedNewsScraper(object):
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def scrape_all(self, latest_db_date=None):
+	def scrape_all(self, get_db_date=True):
 
-		# latest date in database
-		latest_db_date = self.latest_db_date
+		if get_db_date:
+			# latest date in database
+			latest_db_date = self.latest_db_date
+		else:
+			latest_db_date = None
 
 		try:
 			for segg in self.approved_segments:
@@ -317,9 +340,10 @@ class NakedNewsScraper(object):
 		except Exception as e:
 			logging.error(e, exc_info=True)
 
-	def finish_up(self):
+	def __del__(self):
+
 		try:
 			self.browser.quit()
-			#self.db.close_db()
+			# database will close during its destructor
 		except Exception as e:
 			logging.error(e, exc_info=True)
