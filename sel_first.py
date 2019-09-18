@@ -42,7 +42,7 @@ class NakedNewsScraper(object):
 
 		# tuple of segments to grab data for
 		self.approved_segments = ('Auditions', 'Behind The Lens', 'Behind the Scenes', 'Boob of the Week',
-				'Closing Remarks', 'Cooking in the Raw', 'Dating Uncovered',
+				'Busts For Laughs', 'Closing Remarks', 'Cooking in the Raw', 'Dating Uncovered',
 				'Entertainment', 'Flex Appeal', 'Game Spot', 'HollywoodXposed',
 				'Inside The Box', 'Naked At The Movies', 'Naked Foodie', 'Naked Goes Pop',
 				'Naked Goes Pot', 'Naked In The Streets', 'Naked News Moves', 'Naked Yogi',
@@ -51,11 +51,21 @@ class NakedNewsScraper(object):
 				'Riding In A Car Naked', 'Sports', 'Talk is Cheap', 'The Schmooze', 'Travels',
 				'Trending Now', 'Turn it Up', 'Versus', 'Video Blog', "Viewer's Mail", 'Weather', 'Wheels')
 
+		self.skipped_segments = ('A Closer Look', 'All The Rage', 'App-date', 'Best of',
+				'Best of Naked News', 'Bloopers', 'Boob Of The Year', 'Boob-tube', 'Business',
+				'Christmas Special', 'Commentary', 'Costume Contest', 'Drinking In The Raw',
+				'Dumb Criminals', 'Fashion', 'Fringe', 'Health', 'Health Watch', 'Hot Properties',
+				'International News', 'Know your Wood', 'Legal Briefs', 'Life & Leisure',
+				'Lily in the UK', 'Locker Talk', 'Media Matters', 'Naked League Comic', 'Naked Nerd',
+				'Naked Tech', 'Nerd Bites', 'New Release Rack', 'News off the Top Part 3',
+				'North American News', 'NudeViews', 'Olympic Report', 'On the Web', 'One From The Vault',
+				'Pan Am', 'Person of The Year', 'Power Play', 'Pranks', 'Status Update', 'Timeline',
+				'Vampire Bites', 'Year In Review')
+
 		self.log_fmt = '%(filename)s - %(lineno)d - %(funcName)s - %(levelname)s - %(message)s'
 		self.logger = logging.basicConfig(filename='LOGGING/SCRAPER.log', filemode='w', format=self.log_fmt, level=logging.ERROR)
 
 		try:
-
 			# call method to get credentials
 			self.__username, self.__password = self.__get_credentials()
 
@@ -251,6 +261,8 @@ class NakedNewsScraper(object):
 				self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#arhive_index_view > div > div')))
 				self.arhive_index_view_rows_container = self.browser.find_element_by_css_selector('#arhive_index_view > div > div')
 		
+				self.browser.implicitly_wait(self.delay)
+
 				# list of all divs containing desired segment info on page
 				self.individual_segment_list = self.arhive_index_view_rows_container.find_elements_by_css_selector('#arhive_index_view > div > div > div')
 		
