@@ -72,7 +72,7 @@ class NakedNewsScraper(object):
 			# initialize browser
 			self.browser = webdriver.Chrome(chrome_options=self.chrome_options, executable_path=self.chromedriver_path)
 
-			self.delay = 10 # seconds
+			self.delay = 40 # seconds
 			self.wait = WebDriverWait(self.browser, self.delay) # WebDriverWait object
 
 			self.segment_types = []
